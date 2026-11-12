@@ -13,6 +13,7 @@
 
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="heart" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol></svg>
 
 <header>
 <div class="nav">
@@ -61,6 +62,7 @@
       <option value="high">Price: High to Low</option>
       <option value="name">Name</option>
     </select>
+    <button type="button" id="favFilter" class="chip" aria-pressed="false" onclick="toggleFavFilter()"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#heart"/></svg> Favorites</button>
   </div>
   <div class="products" id="productGrid"></div>
 </section>
@@ -182,6 +184,7 @@ function renderProducts(){
   let arr = products.filter(p =>
     (c === "All" || p.cat === c) &&
     (pr === "all" || p.price < 1000) &&
+    (!showFavs || favs.has(p.id)) &&
     p.name.toLowerCase().includes(q)
   );
   if (s === "low")  arr.sort((a,b) => a.price - b.price);
@@ -190,12 +193,14 @@ function renderProducts(){
 
   document.getElementById("resultText").textContent = arr.length + " product" + (arr.length === 1 ? "" : "s") + " available";
   document.getElementById("productGrid").innerHTML = arr.length ? arr.map(p => `<article class="product ${p.cat}">
+    <button class="fav" type="button" data-fav="${p.id}" aria-pressed="false" aria-label="Save ${esc(p.name)} to favorites"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#heart"/></svg></button>
     <div class="product-img" data-view="${p.id}" role="button" tabindex="0" aria-label="View details for ${esc(p.name)}">${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ""}
       <img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy" data-size="${esc(p.size)}" onerror="this.replaceWith(fallbackTub(this.dataset.size))">
     </div>
     <div class="product-body">
       <div class="product-cat">${CATS[p.cat]}</div>
       <h3 data-view="${p.id}" role="button" tabindex="0">${esc(p.name)}</h3>
+      ${ratingRow(p.id)}
       <p class="product-note">${esc(p.note)}</p>
       <button class="viewlink" type="button" data-view="${p.id}">View details →</button>
       <div class="product-bottom">
@@ -203,7 +208,8 @@ function renderProducts(){
         <button class="add" onclick="addToCart(${p.id})">+ Add to cart</button>
       </div>
     </div>
-  </article>`).join("") : `<p class="empty">No products match your filters. Try clearing the search or choosing another category.</p>`;
+  </article>`).join("") : `<p class="empty">${showFavs ? (me ? "You haven't saved any favorites yet. Tap the heart on a product to save it." : `Log in to see the products you've saved. <a href="login.html?next=Fitbro_Shop.html">Log in</a>`) : "No products match your filters. Try clearing the search or choosing another category."}</p>`;
+  paintFavs();
   if (window.fitbroReveal) fitbroReveal();
 }
 
@@ -403,19 +409,31 @@ function openProduct(id){
       <div class="eyebrow">${esc(CATS[p.cat])}</div>
       <h2 id="pdTitle">${esc(p.name)}</h2>
       <p class="pd-meta">${esc(p.size)}</p>
+      <div class="pd-rating">${ratingRow(p.id)}</div>
       <p class="pd-price">${money(p.price)}</p>
       <p class="pd-desc">${esc(p.desc || p.note)}</p>
       ${specs ? `<h3>Specifications</h3><dl class="specs">${specs}</dl>` : ""}
       ${steps ? `<h3>How to take it</h3><ol class="how">${steps}</ol>` : ""}
       <p class="pd-warn">Supplements are not medicines. Check with a doctor first if you are pregnant or nursing, under 18, taking medication, or have a health condition. Do not exceed the suggested use.</p>
-      <button class="btn pd-add" type="button" onclick="addToCart(${p.id})">Add to cart · ${money(p.price)}</button>
-    </div>`;
+      <div class="pd-actions">
+        <button class="btn pd-add" type="button" onclick="addToCart(${p.id})">Add to cart · ${money(p.price)}</button>
+        <button class="chip fav-chip" type="button" data-fav="${p.id}" aria-pressed="false" onclick="toggleFav(${p.id})"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#heart"/></svg><span class="t-off">Save</span><span class="t-on">Saved</span></button>
+      </div>
+    </div>
+    <section class="pd-reviews" aria-label="Ratings and reviews">
+      <h3>Ratings &amp; reviews</h3>
+      <div id="reviewsBody"><p class="note">Loading reviews...</p></div>
+    </section>`;
   $("productModal").classList.remove("hidden");
   $("productModal").querySelector(".pd-close").focus();
+  paintFavs();
+  loadReviews(p.id);
 }
-function closeProduct(){ $("productModal").classList.add("hidden"); }
+function closeProduct(){ $("productModal").classList.add("hidden"); curPid = null; }
 $("productModal").addEventListener("click", e => { if (e.target.id === "productModal") closeProduct(); });
 $("productGrid").addEventListener("click", e => {
+  const fv = e.target.closest("[data-fav]");
+  if (fv) { toggleFav(Number(fv.dataset.fav)); return; }
   const v = e.target.closest("[data-view]");
   if (v) openProduct(Number(v.dataset.view));
 });
@@ -425,6 +443,185 @@ $("productGrid").addEventListener("keydown", e => {
   if (v && v.getAttribute("role") === "button") { e.preventDefault(); openProduct(Number(v.dataset.view)); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") { closeProduct(); closeCheckout(); } });
+
+// ---------- Ratings, favorites and reviews ----------
+let ratings = {};          // product id -> { avg, count }
+let favs = new Set();      // product ids saved by the logged-in user
+let showFavs = false;
+let me = null;             // logged-in user, or null
+let curPid = null, myReview = null;
+
+const fmtD = d => new Date(d).toLocaleDateString("en-PH", { dateStyle: "medium" });
+const starsHtml = avg => `<span class="stars" style="--r:${Number(avg)}" role="img" aria-label="${Number(avg)} out of 5 stars"></span>`;
+function ratingRow(id){
+  const r = ratings[id];
+  return r ? `<div class="rating">${starsHtml(r.avg)}<span>${r.avg.toFixed(1)} (${r.count})</span></div>`
+           : `<div class="rating none">No reviews yet</div>`;
+}
+function goLogin(msg){
+  toast(msg);
+  setTimeout(() => { location.href = "login.html?next=Fitbro_Shop.html"; }, 1300);
+}
+
+async function loadRatings(){
+  try {
+    const res = await fetch(SUPABASE_URL + "/rest/v1/product_ratings?select=product_id,avg_rating,review_count", { headers: SB_HEADERS });
+    if (!res.ok) return;
+    ratings = {};
+    (await res.json()).forEach(r => { ratings[r.product_id] = { avg: Number(r.avg_rating), count: Number(r.review_count) }; });
+  } catch (e) {}
+}
+async function loadFavs(){
+  me = await currentUser();
+  favs = new Set();
+  if (me) {
+    const { data, error } = await sb.from("favorites").select("product_id");
+    if (!error && data) data.forEach(r => favs.add(r.product_id));
+  }
+  paintFavs();
+  if (showFavs) renderProducts();
+}
+function paintFavs(){
+  document.querySelectorAll("[data-fav]").forEach(b => {
+    const on = favs.has(Number(b.dataset.fav));
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on);
+  });
+}
+async function toggleFav(id){
+  if (!me) { goLogin("Please log in to save favorites"); return; }
+  const was = favs.has(id);
+  if (was) favs.delete(id); else favs.add(id);
+  paintFavs();
+  document.querySelectorAll('[data-fav="' + id + '"]').forEach(b => { b.classList.add("beat"); setTimeout(() => b.classList.remove("beat"), 500); });
+  const { error } = was
+    ? await sb.from("favorites").delete().eq("product_id", id)
+    : await sb.from("favorites").insert({ product_id: id });
+  if (error) {
+    if (was) favs.add(id); else favs.delete(id);
+    paintFavs(); toast("Couldn't update favorites. Try again."); return;
+  }
+  toast(was ? "Removed from favorites" : "Saved to favorites");
+  if (showFavs) renderProducts();
+}
+function toggleFavFilter(){
+  showFavs = !showFavs;
+  const b = $("favFilter");
+  b.setAttribute("aria-pressed", showFavs);
+  renderProducts();
+}
+sb.auth.onAuthStateChange(() => { loadFavs(); });
+
+// ----- reviews inside the product window -----
+function reviewSummary(list){
+  if (!list.length) return `<p class="note rv-empty">No reviews yet. Be the first to rate this product.</p>`;
+  const avg = list.reduce((a, r) => a + r.rating, 0) / list.length;
+  const bars = [5, 4, 3, 2, 1].map(n => {
+    const c = list.filter(r => r.rating === n).length;
+    return `<div class="dist"><span>${n}★</span><i><span style="width:${c / list.length * 100}%"></span></i><b>${c}</b></div>`;
+  }).join("");
+  return `<div class="rv-sum"><div class="rv-big"><b>${avg.toFixed(1)}</b>${starsHtml(avg)}<span>${list.length} review${list.length === 1 ? "" : "s"}</span></div><div class="rv-bars">${bars}</div></div>`;
+}
+function reviewForm(){
+  if (!me) return `<p class="rv-login">Log in to rate this product and join the conversation. <a class="btn sm" href="login.html?next=Fitbro_Shop.html">Log in</a></p>`;
+  const r = myReview;
+  const stars = [5, 4, 3, 2, 1].map(n =>
+    `<input type="radio" name="rating" id="rt${n}" value="${n}" ${r && r.rating === n ? "checked" : ""} required><label for="rt${n}" title="${n} star${n > 1 ? "s" : ""}"><span class="sr">${n} star${n > 1 ? "s" : ""}</span>★</label>`).join("");
+  return `<form id="rvForm" class="rv-form">
+    <h4>${r ? "Edit your review" : "Write a review"}</h4>
+    <fieldset class="starpick"><legend class="sr">Your rating</legend>${stars}</fieldset>
+    <textarea name="comment" rows="3" maxlength="1000" placeholder="Share your experience (optional)">${esc(r ? r.comment || "" : "")}</textarea>
+    <p class="msgline" id="rvMsg" role="alert"></p>
+    <div class="row"><button class="btn sm" type="submit">${r ? "Update review" : "Post review"}</button>${r ? `<button type="button" class="btn sm outline" data-rv="delete" data-id="${r.id}">Delete my review</button>` : ""}</div>
+  </form>`;
+}
+function reviewList(list){
+  return `<div class="rv-list">${list.map(r => {
+    const replies = (r.review_replies || []).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const mine = me && r.user_id === me.id;
+    return `<article class="rv">
+      <div class="rv-head"><b>${esc(r.author_name)}</b>${r.is_admin ? '<span class="team">Fitbro team</span>' : ""}${starsHtml(r.rating)}<time>${fmtD(r.created_at)}${r.updated_at ? " (edited)" : ""}</time></div>
+      ${r.comment ? `<p class="rv-text">${esc(r.comment)}</p>` : ""}
+      <div class="rv-actions"><button type="button" data-rv="reply" data-id="${r.id}">Reply${replies.length ? " (" + replies.length + ")" : ""}</button>${mine ? `<button type="button" data-rv="delete" data-id="${r.id}">Delete</button>` : ""}</div>
+      <div class="replies">${replies.map(p => `<div class="reply">
+        <div class="rv-head"><b>${esc(p.author_name)}</b>${p.is_admin ? '<span class="team">Fitbro team</span>' : ""}<time>${fmtD(p.created_at)}</time></div>
+        <p class="rv-text">${esc(p.body)}</p>
+        ${me && p.user_id === me.id ? `<button type="button" class="rv-del" data-rv="delreply" data-id="${p.id}">Delete</button>` : ""}</div>`).join("")}</div>
+      <form class="reply-form hidden" data-review="${r.id}">
+        <textarea name="body" rows="2" maxlength="1000" placeholder="Write a reply..." required></textarea>
+        <div class="row"><button class="btn sm" type="submit">Send reply</button><button type="button" class="btn sm outline" data-rv="cancel">Cancel</button></div>
+      </form>
+    </article>`;
+  }).join("")}</div>`;
+}
+async function loadReviews(pid){
+  curPid = pid;
+  const box = $("reviewsBody");
+  const { data, error } = await sb.from("reviews").select("*, review_replies(*)").eq("product_id", pid).order("created_at", { ascending: false }).limit(100);
+  if (curPid !== pid) return;
+  if (error) { box.innerHTML = `<p class="note">Reviews aren't available right now.</p>`; return; }
+  me = await currentUser();
+  myReview = me ? (data.find(r => r.user_id === me.id) || null) : null;
+  box.innerHTML = reviewSummary(data) + reviewForm() + reviewList(data);
+}
+async function afterReviewChange(){
+  await loadReviews(curPid);
+  await loadRatings();
+  renderProducts();
+  const row = document.querySelector("#productBody .pd-rating");
+  if (row) row.innerHTML = ratingRow(curPid);
+}
+$("productModal").addEventListener("click", async e => {
+  const b = e.target.closest("[data-rv]");
+  if (!b) return;
+  const act = b.dataset.rv, id = Number(b.dataset.id);
+  if (act === "reply") {
+    if (!me) { goLogin("Please log in to reply"); return; }
+    const f = b.closest(".rv").querySelector(".reply-form");
+    f.classList.toggle("hidden");
+    if (!f.classList.contains("hidden")) f.querySelector("textarea").focus();
+  } else if (act === "cancel") {
+    b.closest(".reply-form").classList.add("hidden");
+  } else if (act === "delete") {
+    if (!confirm("Delete your review?")) return;
+    const { error } = await sb.from("reviews").delete().eq("id", id);
+    if (error) return toast("Couldn't delete the review.");
+    toast("Review deleted"); afterReviewChange();
+  } else if (act === "delreply") {
+    if (!confirm("Delete your reply?")) return;
+    const { error } = await sb.from("review_replies").delete().eq("id", id);
+    if (error) return toast("Couldn't delete the reply.");
+    toast("Reply deleted"); afterReviewChange();
+  }
+});
+$("productModal").addEventListener("submit", async e => {
+  const form = e.target;
+  if (form.id === "rvForm") {
+    e.preventDefault();
+    const f = new FormData(form), msg = $("rvMsg"), btn = form.querySelector("button[type=submit]");
+    const rating = Number(f.get("rating"));
+    if (!rating) { msg.textContent = "Please choose a star rating."; return; }
+    const comment = String(f.get("comment") || "").trim();
+    btn.disabled = true; msg.textContent = "";
+    const { error } = myReview
+      ? await sb.from("reviews").update({ rating, comment }).eq("id", myReview.id)
+      : await sb.from("reviews").insert({ product_id: curPid, rating, comment });
+    btn.disabled = false;
+    if (error) { msg.textContent = error.code === "23505" ? "You've already reviewed this product." : "Couldn't save your review. Please try again."; return; }
+    toast(myReview ? "Review updated" : "Thanks for your review!");
+    afterReviewChange();
+  } else if (form.classList.contains("reply-form")) {
+    e.preventDefault();
+    if (!me) { goLogin("Please log in to reply"); return; }
+    const body = form.body.value.trim();
+    if (!body) return;
+    const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+    const { error } = await sb.from("review_replies").insert({ review_id: Number(form.dataset.review), body });
+    btn.disabled = false;
+    if (error) return toast("Couldn't send your reply.");
+    toast("Reply posted"); afterReviewChange();
+  }
+});
 
 function focusSearch(){ document.getElementById("search").focus(); }
 function toast(t){
@@ -455,6 +652,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("resultText").textContent = "";
     return;
   }
+  await Promise.all([loadRatings(), loadFavs()]);
   const params = new URLSearchParams(window.location.search);
   const catParam = params.get("category");
   if (catParam && CATS[catParam]) document.getElementById("category").value = catParam;

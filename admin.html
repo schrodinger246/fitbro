@@ -65,6 +65,9 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .form2 input:not([type=checkbox]), .form2 select { width: 100%; border-radius: 14px; }
 .form2 textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--glass-border); background: var(--input); border-radius: 14px; color: var(--text); font: inherit; font-weight: 400; resize: vertical; outline: none; }
 .form2 textarea:focus { border-color: var(--blue); }
+.atext { width: 100%; padding: 12px 16px; border: 1px solid var(--glass-border); background: var(--input); border-radius: 16px; color: var(--text); font: inherit; resize: vertical; outline: none; }
+.atext:focus { border-color: var(--blue); }
+.admin-reply { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .chk { display: flex !important; align-items: center; gap: 8px; }
 .note { color: var(--muted); font-size: 13px; }
 .msgline { color: var(--orange); font-size: 14px; font-weight: 500; min-height: 20px; }
@@ -125,6 +128,7 @@ td.num, th.num { text-align: right; white-space: nowrap; }
     <button class="atab" data-tab="overview" aria-selected="true">Overview</button>
     <button class="atab" data-tab="orders" aria-selected="false">Orders</button>
     <button class="atab" data-tab="products" aria-selected="false">Products</button>
+    <button class="atab" data-tab="reviews" aria-selected="false">Reviews</button>
   </div>
 
   <section class="pane" id="pane-overview">
@@ -163,7 +167,25 @@ td.num, th.num { text-align: right; white-space: nowrap; }
       </table></div>
     </div>
   </section>
+
+  <section class="pane hidden" id="pane-reviews">
+    <div class="panel">
+      <div class="tools">
+        <select id="rvFilter" aria-label="Filter reviews"><option value="all">All reviews</option><option value="needs">Needs a team reply</option></select>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Product</th><th>Rating</th><th>Customer</th><th>Comment</th><th class="num">Replies</th><th>Date</th></tr></thead>
+        <tbody id="reviewRows"></tbody>
+      </table></div>
+      <p class="note" id="reviewCount" style="margin-top:12px"></p>
+    </div>
+  </section>
 </main>
+
+<!-- Review thread -->
+<div class="overlay hidden" id="reviewModal">
+  <div class="modal wide" id="reviewBody"></div>
+</div>
 
 <!-- Order detail -->
 <div class="overlay hidden" id="orderModal">
@@ -208,7 +230,7 @@ const esc = escapeHtml;
 const ADMIN_DOMAIN = "example.com";   // typing just "admin123" signs in as admin123@example.com
 const STATUSES = ["pending", "paid", "shipped", "delivered", "cancelled"];
 const CATS = { "bulking": "Bulking", "cutting": "Cutting / Fat Loss", "all-phase": "All-Phase" };
-let orders = [], products = [], editingId = null;
+let orders = [], products = [], reviews = [], editingId = null;
 
 const money = n => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 });
 const fmtDate = d => new Date(d).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
@@ -266,14 +288,16 @@ async function loadAll() {
   ]);
   if (o.error || p.error) { toast("Couldn't load data. Did you run fitbro_admin.sql?"); return; }
   orders = o.data; products = p.data;
-  renderOverview(); renderOrders(); renderProducts();
+  const rv = await sb.from("reviews").select("*, review_replies(*), products(name)").order("created_at", { ascending: false }).limit(500);
+  reviews = rv.error ? [] : rv.data;
+  renderOverview(); renderOrders(); renderProducts(); renderReviews();
 }
 $("refreshBtn").onclick = async () => { await loadAll(); toast("Refreshed"); };
 
 /* ---------- tabs ---------- */
 document.querySelectorAll(".atab").forEach(b => b.onclick = () => {
   document.querySelectorAll(".atab").forEach(x => x.setAttribute("aria-selected", x === b));
-  ["overview", "orders", "products"].forEach(t => $("pane-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+  ["overview", "orders", "products", "reviews"].forEach(t => $("pane-" + t).classList.toggle("hidden", t !== b.dataset.tab));
 });
 
 /* ---------- overview ---------- */
@@ -457,7 +481,73 @@ $("productForm").onsubmit = async e => {
   closeProduct(); renderProducts(); renderOverview(); toast("Product saved");
 };
 
-document.addEventListener("keydown", e => { if (e.key === "Escape") { closeOrder(); closeProduct(); } });
+/* ---------- reviews ---------- */
+const starsTxt = n => `<span class="stars" style="--r:${Number(n)}" role="img" aria-label="${Number(n)} out of 5"></span>`;
+function renderReviews() {
+  const only = $("rvFilter").value === "needs";
+  const list = reviews.filter(r => !only || !(r.review_replies || []).some(x => x.is_admin));
+  $("reviewRows").innerHTML = list.map(r => `<tr class="click" data-id="${r.id}">
+    <td>${esc(r.products ? r.products.name : "Product #" + r.product_id)}</td>
+    <td>${starsTxt(r.rating)}</td>
+    <td>${esc(r.author_name)}</td>
+    <td>${r.comment ? esc(r.comment.length > 70 ? r.comment.slice(0, 70) + "..." : r.comment) : '<span class="note">(no comment)</span>'}</td>
+    <td class="num">${(r.review_replies || []).length}</td>
+    <td>${fmtDate(r.created_at)}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="note">No reviews ${only ? "waiting for a reply" : "yet"}.</td></tr>`;
+  document.querySelectorAll("#reviewRows tr.click").forEach(r => r.onclick = () => openReview(Number(r.dataset.id)));
+  $("reviewCount").textContent = list.length + " of " + reviews.length + " reviews";
+}
+$("rvFilter").onchange = renderReviews;
+
+function openReview(id) {
+  const r = reviews.find(x => x.id === id); if (!r) return;
+  const reps = (r.review_replies || []).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  $("reviewBody").innerHTML = `
+    <div class="mhead"><div><div class="eyebrow">${esc(r.products ? r.products.name : "Product")}</div><h2>Review</h2></div>
+      <button class="icon-btn" type="button" id="rvClose" aria-label="Close">✕</button></div>
+    <div class="kv"><span>Customer</span><div>${esc(r.author_name)}${r.is_admin ? " (team)" : ""}</div>
+      <span>Rating</span><div>${starsTxt(r.rating)} ${r.rating}/5</div>
+      <span>Date</span><div>${fmtDate(r.created_at)}${r.updated_at ? " (edited)" : ""}</div></div>
+    <p style="margin-bottom:18px;white-space:pre-wrap;overflow-wrap:anywhere">${r.comment ? esc(r.comment) : '<span class="note">(no comment)</span>'}</p>
+    <h3 style="font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:24px;text-transform:uppercase;margin-bottom:8px">Replies (${reps.length})</h3>
+    ${reps.map(p => `<div class="admin-reply"><div><b>${esc(p.author_name)}</b>${p.is_admin ? ' <span class="badge2 s-pending">team</span>' : ""}
+        <span class="note"> · ${fmtDate(p.created_at)}</span><p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(p.body)}</p></div>
+        <button class="tbtn sm danger" type="button" data-delreply="${p.id}">Delete</button></div>`).join("") || '<p class="note">No replies yet.</p>'}
+    <form id="adminReplyForm" style="margin-top:16px;display:grid;gap:10px">
+      <textarea name="body" rows="3" maxlength="1000" placeholder="Reply as Fitbro Team..." required class="atext"></textarea>
+      <div class="row"><button class="tbtn" type="submit">Reply as Fitbro Team</button>
+      <button class="tbtn danger" type="button" id="rvDelete" style="margin-left:auto">Delete review</button></div>
+    </form>`;
+  $("reviewModal").classList.remove("hidden");
+  $("rvClose").onclick = closeReview;
+  $("adminReplyForm").onsubmit = async e => {
+    e.preventDefault();
+    const body = e.target.body.value.trim(); if (!body) return;
+    const { data, error } = await sb.from("review_replies").insert({ review_id: id, body }).select();
+    if (error || !data || !data.length) return toast("Couldn't send the reply.");
+    r.review_replies = (r.review_replies || []).concat(data[0]);
+    toast("Reply posted"); renderReviews(); openReview(id);
+  };
+  $("rvDelete").onclick = async () => {
+    if (!confirm("Delete this review and its replies? This can't be undone.")) return;
+    const { data, error } = await sb.from("reviews").delete().eq("id", id).select();
+    if (error || !data || !data.length) return toast("Couldn't delete the review.");
+    reviews = reviews.filter(x => x.id !== id); toast("Review deleted");
+    renderReviews(); closeReview();
+  };
+  document.querySelectorAll("[data-delreply]").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this reply?")) return;
+    const rid = Number(b.dataset.delreply);
+    const { data, error } = await sb.from("review_replies").delete().eq("id", rid).select();
+    if (error || !data || !data.length) return toast("Couldn't delete the reply.");
+    r.review_replies = r.review_replies.filter(x => x.id !== rid);
+    toast("Reply deleted"); renderReviews(); openReview(id);
+  });
+}
+function closeReview() { $("reviewModal").classList.add("hidden"); }
+$("reviewModal").addEventListener("click", e => { if (e.target.id === "reviewModal") closeReview(); });
+
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeOrder(); closeProduct(); closeReview(); } });
 sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") route(); });
 route();
 </script>
