@@ -19,7 +19,12 @@ async function renderAuthArea() {
   const u = await currentUser();
   if (u) {
     const name = (u.user_metadata && u.user_metadata.full_name) || (u.email || "").split("@")[0];
-    el.innerHTML = `<span class="auth-name">Hi, ${escapeHtml(name)}</span><button class="auth-btn" id="logoutBtn">Log out</button>`;
+    let adminLink = "";
+    try {
+      const { data } = await sb.from("admins").select("user_id").eq("user_id", u.id).maybeSingle();
+      if (data) adminLink = `<a class="auth-btn" href="admin.html">Dashboard</a>`;
+    } catch (e) {}
+    el.innerHTML = `<span class="auth-name">Hi, ${escapeHtml(name)}</span>${adminLink}<button class="auth-btn" id="logoutBtn">Log out</button>`;
     document.getElementById("logoutBtn").onclick = async () => { await sb.auth.signOut(); location.reload(); };
   } else {
     el.innerHTML = `<a class="auth-btn" href="login.html">Log in</a>`;
