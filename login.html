@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>try{var t=localStorage.getItem("fitbroTheme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","light")}</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log in — Fitbro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fitbro.css">
+<script src="theme.js" defer></script>
+
+</head>
+<body>
+
+<header>
+  <div class="nav">
+    <a href="index.html" class="logo">Fit<b>bro</b></a>
+    <a href="Fitbro_Shop.html" class="back">← Back to shop</a>
+  </div>
+</header>
+
+<main class="login">
+  <div class="card">
+    <h1 id="title">Welcome</h1>
+    <p class="sub" id="subtitle">Log in or create an account to check out faster.</p>
+    <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+    <!-- Log in / Sign up -->
+    <section id="authView">
+      <div class="tabs" role="tablist">
+        <button class="tab" id="tabSignin" role="tab" aria-selected="true">Log in</button>
+        <button class="tab" id="tabSignup" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <form id="signinForm">
+        <label>Email <input type="email" name="email" autocomplete="email" required></label>
+        <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+        <button class="btn" type="submit">Log in</button>
+        <button class="link" type="button" id="forgotBtn">Forgot your password?</button>
+      </form>
+
+      <form id="signupForm" class="hidden">
+        <label>Full name <input type="text" name="name" autocomplete="name" required></label>
+        <label>Email <input type="email" name="email" autocomplete="email" required></label>
+        <label>Password <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+          <span class="hint">At least 8 characters.</span></label>
+        <label>Confirm password <input type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
+        <button class="btn" type="submit">Create account</button>
+      </form>
+    </section>
+
+    <!-- Already signed in -->
+    <section id="signedInView" class="stack hidden">
+      <a class="btn" href="Fitbro_Shop.html">Continue shopping</a>
+      <button class="btn outline" id="logoutBtn2" type="button">Log out</button>
+    </section>
+
+    <!-- Set a new password (after clicking the reset email link) -->
+    <section id="resetView" class="hidden">
+      <form id="resetForm">
+        <label>New password <input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="btn" type="submit">Save new password</button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="auth.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const nextParam = qs.get("next") || "";
+const NEXT = /^[A-Za-z0-9_\-]+\.html$/.test(nextParam) ? nextParam : "Fitbro_Shop.html";
+const redirectTo = location.protocol.startsWith("http") ? location.origin + location.pathname : undefined;
+let recovering = false;
+
+function msg(text, type) {
+  const m = $("msg");
+  m.textContent = text || "";
+  m.className = "msg" + (text ? " " + type : "");
+}
+function friendly(err) {
+  const t = (err && err.message) || "Something went wrong.";
+  if (/invalid login/i.test(t)) return "Wrong email or password.";
+  if (/not confirmed/i.test(t)) return "Please confirm your email first. Check your inbox for the link.";
+  if (/rate limit|too many/i.test(t)) return "Too many attempts. Please wait a few minutes and try again.";
+  return t;
+}
+function setBusy(form, busy, label) {
+  const b = form.querySelector("button[type=submit]");
+  b.disabled = busy;
+  b.textContent = busy ? "Please wait..." : label;
+}
+
+function showTab(which) {
+  const signin = which === "signin";
+  $("tabSignin").setAttribute("aria-selected", signin);
+  $("tabSignup").setAttribute("aria-selected", !signin);
+  $("signinForm").classList.toggle("hidden", !signin);
+  $("signupForm").classList.toggle("hidden", signin);
+  msg("");
+}
+$("tabSignin").onclick = () => showTab("signin");
+$("tabSignup").onclick = () => showTab("signup");
+
+async function refreshView() {
+  const u = await currentUser();
+  $("authView").classList.add("hidden");
+  $("signedInView").classList.add("hidden");
+  $("resetView").classList.add("hidden");
+  if (recovering) {
+    $("title").textContent = "New password";
+    $("subtitle").textContent = "Choose a new password for your account.";
+    $("resetView").classList.remove("hidden");
+  } else if (u) {
+    const name = (u.user_metadata && u.user_metadata.full_name) || u.email;
+    $("title").textContent = "You're in";
+    $("subtitle").textContent = "Signed in as " + name + ".";
+    $("signedInView").classList.remove("hidden");
+  } else {
+    $("title").textContent = "Welcome";
+    $("subtitle").textContent = "Log in or create an account to check out faster.";
+    $("authView").classList.remove("hidden");
+  }
+}
+
+$("signinForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  msg(""); setBusy(e.target, true, "Log in");
+  const { error } = await sb.auth.signInWithPassword({ email: f.get("email").trim(), password: f.get("password") });
+  if (error) { msg(friendly(error), "error"); setBusy(e.target, false, "Log in"); return; }
+  location.href = NEXT;
+};
+
+$("signupForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  if (f.get("password") !== f.get("confirm")) { msg("Passwords don't match.", "error"); return; }
+  msg(""); setBusy(e.target, true, "Create account");
+  const { data, error } = await sb.auth.signUp({
+    email: f.get("email").trim(),
+    password: f.get("password"),
+    options: { data: { full_name: f.get("name").trim() }, emailRedirectTo: redirectTo }
+  });
+  setBusy(e.target, false, "Create account");
+  if (error) { msg(friendly(error), "error"); return; }
+  if (data.user && data.user.identities && data.user.identities.length === 0) {
+    msg("An account with this email already exists. Try logging in instead.", "error"); return;
+  }
+  if (data.session) { location.href = NEXT; return; }   // email confirmation is switched off
+  e.target.reset();
+  msg("Account created. We sent a confirmation link to your email. Click it, then come back and log in.", "ok");
+};
+
+$("forgotBtn").onclick = async () => {
+  const email = $("signinForm").elements["email"].value.trim();
+  if (!email) { msg("Type your email above first, then click 'Forgot your password?'.", "error"); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) { msg(friendly(error), "error"); return; }
+  msg("If an account exists for that email, a reset link is on its way.", "ok");
+};
+
+$("resetForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  setBusy(e.target, true, "Save new password");
+  const { error } = await sb.auth.updateUser({ password: f.get("password") });
+  setBusy(e.target, false, "Save new password");
+  if (error) { msg(friendly(error), "error"); return; }
+  recovering = false;
+  msg("Password updated.", "ok");
+  refreshView();
+};
+
+$("logoutBtn2").onclick = async () => { await sb.auth.signOut(); msg("You've been logged out.", "ok"); refreshView(); };
+
+sb.auth.onAuthStateChange(event => {
+  if (event === "PASSWORD_RECOVERY") recovering = true;
+  refreshView();
+});
+refreshView();
+</script>
+</body>
+</html>
