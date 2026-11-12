@@ -63,6 +63,8 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .form2 .full { grid-column: 1 / -1; }
 .form2 label { font-size: 13px; font-weight: 600; display: grid; gap: 4px; }
 .form2 input:not([type=checkbox]), .form2 select { width: 100%; border-radius: 14px; }
+.form2 textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--glass-border); background: var(--input); border-radius: 14px; color: var(--text); font: inherit; font-weight: 400; resize: vertical; outline: none; }
+.form2 textarea:focus { border-color: var(--blue); }
 .chk { display: flex !important; align-items: center; gap: 8px; }
 .note { color: var(--muted); font-size: 13px; }
 .msgline { color: var(--orange); font-size: 14px; font-weight: 500; min-height: 20px; }
@@ -186,6 +188,9 @@ td.num, th.num { text-align: right; white-space: nowrap; }
       <label>Price (₱) <input name="price" type="number" min="0" step="0.01" required></label>
       <label>Tag <input name="tag" placeholder="New, Best Seller, or empty" maxlength="30"></label>
       <label class="full">Short description <input name="note" maxlength="255"></label>
+      <label class="full">Description (shown when a customer opens the product) <textarea name="description" rows="3" maxlength="600"></textarea></label>
+      <label class="full">Specifications (one per line, written as Label: value) <textarea name="specs" rows="6" placeholder="Serving size: 30 g&#10;Servings per container: 30"></textarea></label>
+      <label class="full">How to take it (one step per line) <textarea name="how_to_take" rows="4" maxlength="1200"></textarea></label>
       <label class="chk full"><input type="checkbox" name="active" checked> Show in the shop</label>
       <p class="msgline full" id="pMsg"></p>
       <div class="row full"><button class="tbtn" type="submit">Save product</button><button class="tbtn ghost" type="button" id="pCancel">Cancel</button></div>
@@ -334,6 +339,7 @@ function openOrder(id) {
       <span>Phone</span><div>${esc(o.phone)}</div>
       <span>Address</span><div>${esc(o.address)}, ${esc(o.city)}</div>
       <span>Payment</span><div>${esc(o.payment_method)}</div>
+      ${o.payment_details ? `<span>Payment info</span><div>${esc(o.payment_details)}</div>` : ""}
       <span>Account</span><div>${o.user_id ? "Registered customer" : "Guest checkout"}</div>
     </div>
     <div class="table-wrap"><table>
@@ -374,8 +380,8 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"';
 }
 $("csvBtn").onclick = () => {
-  const head = ["Order", "Date", "Name", "Email", "Phone", "Address", "City", "Payment", "Status", "Total", "Items"];
-  const rows = orders.map(o => [o.id, o.created_at, o.customer_name, o.email, o.phone, o.address, o.city, o.payment_method, o.status, o.total,
+  const head = ["Order", "Date", "Name", "Email", "Phone", "Address", "City", "Payment", "Payment details", "Status", "Total", "Items"];
+  const rows = orders.map(o => [o.id, o.created_at, o.customer_name, o.email, o.phone, o.address, o.city, o.payment_method, o.payment_details, o.status, o.total,
     (o.order_items || []).map(i => i.qty + "x " + i.product_name).join("; ")]);
   const csv = [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
   const a = document.createElement("a");
@@ -426,6 +432,9 @@ function openProduct(p) {
   f.name.value = p ? p.name : ""; f.img.value = p ? p.img : ""; f.size.value = p ? p.size : "";
   f.category.value = p ? p.category : "bulking"; f.price.value = p ? p.price : "";
   f.tag.value = p ? p.tag : ""; f.note.value = p ? p.note : ""; f.active.checked = p ? p.active : true;
+  f.description.value = p ? (p.description || "") : "";
+  f.specs.value = p ? (Array.isArray(p.specs) ? p.specs : []).map(x => x.label + ": " + x.value).join("\n") : "";
+  f.how_to_take.value = p ? (p.how_to_take || "") : "";
   $("productModal").classList.remove("hidden");
 }
 function closeProduct() { $("productModal").classList.add("hidden"); }
@@ -436,7 +445,11 @@ $("productForm").onsubmit = async e => {
   e.preventDefault();
   const f = e.target;
   const row = { name: f.name.value.trim(), img: f.img.value.trim(), size: f.size.value.trim(), category: f.category.value,
-    price: Number(f.price.value), tag: f.tag.value.trim(), note: f.note.value.trim(), active: f.active.checked };
+    price: Number(f.price.value), tag: f.tag.value.trim(), note: f.note.value.trim(), active: f.active.checked,
+    description: f.description.value.trim(), how_to_take: f.how_to_take.value.trim(),
+    specs: f.specs.value.split("\n").map(l => l.trim()).filter(l => l.includes(":")).map(l => {
+      const i = l.indexOf(":"); return { label: l.slice(0, i).trim(), value: l.slice(i + 1).trim() };
+    }).filter(x => x.label && x.value) };
   const q = editingId ? sb.from("products").update(row).eq("id", editingId).select() : sb.from("products").insert(row).select();
   const { data, error } = await q;
   if (error || !data || !data.length) { $("pMsg").textContent = "Couldn't save: " + (error ? error.message : "not allowed"); return; }

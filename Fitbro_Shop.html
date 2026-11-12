@@ -109,7 +109,7 @@
 <!-- CHECKOUT MODAL -->
 <div class="overlay hidden" id="checkoutModal">
   <div class="modal">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div id="checkoutHead" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <div>
         <div class="eyebrow">Order summary</div>
         <h2>Checkout</h2>
@@ -124,21 +124,27 @@
       <input required type="tel" name="phone" placeholder="Phone Number">
       <input required name="address" placeholder="Delivery Address">
       <input required name="city" placeholder="City / Region">
-      <select required name="payment">
+      <select required name="payment" aria-label="Payment method">
         <option value="">Payment Method</option>
         <option>Cash on Delivery</option>
         <option>GCash</option>
         <option>Maya</option>
-        <option>Bank Transfer</option>
         <option>Credit/Debit Card</option>
       </select>
+      <div id="payFields" class="pay-fields"></div>
       <label style="font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;margin-top:4px;">
         <input type="checkbox" required style="width:auto;margin-top:3px;">
         <span>I understand supplements are not medicines, and I'll check with a doctor if I have a health condition or take medication.</span>
       </label>
       <button class="btn" type="submit" style="margin-top:8px;">Place Order</button>
     </form>
+    <div id="orderDone" class="order-done hidden" aria-live="polite"></div>
   </div>
+</div>
+
+<!-- PRODUCT DETAILS -->
+<div class="overlay hidden" id="productModal" role="dialog" aria-modal="true" aria-labelledby="pdTitle">
+  <div class="modal wide pd" id="productBody"></div>
 </div>
 
 <div class="toast" id="toast" role="status"></div>
@@ -184,13 +190,14 @@ function renderProducts(){
 
   document.getElementById("resultText").textContent = arr.length + " product" + (arr.length === 1 ? "" : "s") + " available";
   document.getElementById("productGrid").innerHTML = arr.length ? arr.map(p => `<article class="product ${p.cat}">
-    <div class="product-img">${p.tag ? `<span class="tag">${p.tag}</span>` : ""}
-      <img src="${p.img}" alt="${p.name}" loading="lazy" onerror="this.replaceWith(fallbackTub('${p.size}'))">
+    <div class="product-img" data-view="${p.id}" role="button" tabindex="0" aria-label="View details for ${esc(p.name)}">${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ""}
+      <img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy" data-size="${esc(p.size)}" onerror="this.replaceWith(fallbackTub(this.dataset.size))">
     </div>
     <div class="product-body">
       <div class="product-cat">${CATS[p.cat]}</div>
-      <h3>${p.name}</h3>
-      <p class="product-note">${p.note}</p>
+      <h3 data-view="${p.id}" role="button" tabindex="0">${esc(p.name)}</h3>
+      <p class="product-note">${esc(p.note)}</p>
+      <button class="viewlink" type="button" data-view="${p.id}">View details →</button>
       <div class="product-bottom">
         <span class="price">${money(p.price)}</span>
         <button class="add" onclick="addToCart(${p.id})">+ Add to cart</button>
@@ -246,6 +253,7 @@ function openCheckout(){
   document.getElementById("checkoutTotal").innerHTML = `<b>Order total: ${money(cartTotal())}</b>`;
   document.getElementById("checkoutModal").classList.remove("hidden");
   prefillCheckout();
+  renderPayFields();
 }
 async function prefillCheckout(){
   const u = await currentUser();
@@ -255,41 +263,169 @@ async function prefillCheckout(){
   if (n && !n.value) n.value = (u.user_metadata && u.user_metadata.full_name) || "";
   if (m && !m.value) m.value = u.email || "";
 }
-function closeCheckout(){ document.getElementById("checkoutModal").classList.add("hidden"); }
+function closeCheckout(){
+  $("checkoutModal").classList.add("hidden");
+  // restore the form view for the next order
+  $("checkoutHead").classList.remove("hidden");
+  $("checkoutTotal").classList.remove("hidden");
+  document.querySelector(".checkout-form").classList.remove("hidden");
+  $("orderDone").classList.add("hidden");
+}
 async function placeOrder(e){
   e.preventDefault();
   const form = e.target;
   const btn = form.querySelector("button[type=submit]");
-  const err = document.getElementById("formError");
+  const err = $("formError");
   const f = new FormData(form);
   err.style.display = "none";
+  const pay = readPayment(f);
+  if (pay.error) { err.textContent = pay.error; err.style.display = "block"; return; }
   btn.disabled = true; btn.textContent = "Placing order...";
   try {
     const { data: { session } } = await sb.auth.getSession();
     const orderHeaders = { ...SB_HEADERS };
     if (session) orderHeaders["Authorization"] = "Bearer " + session.access_token;
+    const method = f.get("payment");
     const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/place_order", {
       method: "POST",
       headers: orderHeaders,
       body: JSON.stringify({
         customer: {
           name: f.get("name"), email: f.get("email"), phone: f.get("phone"),
-          address: f.get("address"), city: f.get("city"), payment: f.get("payment")
+          address: f.get("address"), city: f.get("city"),
+          payment: method, payment_details: pay.details
         },
         items: cart.map(i => ({id: i.id, qty: i.qty}))
       })
     });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || "Could not place order.");
-    cart = []; save(); closeCheckout(); form.reset();
-    document.getElementById("cartDrawer").classList.remove("open");
-    toast("Order #" + data.order_id + " placed. Thank you!");
+    cart = []; save(); form.reset(); renderPayFields();
+    $("cartDrawer").classList.remove("open");
+    showOrderDone(data.order_id, data.total, method, pay.last4);
   } catch (ex) {
     err.textContent = ex.message; err.style.display = "block";
   } finally {
     btn.disabled = false; btn.textContent = "Place Order";
   }
 }
+// ---------- Payment method fields ----------
+const $ = id => document.getElementById(id);
+const esc = escapeHtml;
+
+function renderPayFields(){
+  const sel = document.querySelector("#checkoutModal [name=payment]");
+  const box = $("payFields");
+  if (!sel || !box) return;
+  const m = sel.value;
+  if (m === "Cash on Delivery") {
+    box.innerHTML = `<div class="pay-note"><b>Cash on Delivery</b><br>Pay in cash when your order arrives. Please prepare <b>${money(cartTotal())}</b>.</div>`;
+  } else if (m === "GCash" || m === "Maya") {
+    box.innerHTML = `<div class="pay-note"><b>${m}</b><br>Enter the mobile number linked to your ${m} account. This is a demo checkout: no real payment is processed.</div>
+      <input required name="wallet" type="tel" inputmode="numeric" autocomplete="tel" maxlength="16" placeholder="${m} mobile number (09XX XXX XXXX)" aria-label="${m} mobile number">`;
+  } else if (m === "Credit/Debit Card") {
+    box.innerHTML = `<div class="pay-note"><b>Credit / Debit Card</b><br>This is a demo checkout: no real payment is processed, so please don't enter a real card. Only the last 4 digits are saved with the order.</div>
+      <input required name="cardnumber" inputmode="numeric" autocomplete="cc-number" maxlength="23" placeholder="Card number" aria-label="Card number">
+      <input required name="cardname" autocomplete="cc-name" maxlength="60" placeholder="Name on card" aria-label="Name on card">
+      <div class="pay-grid">
+        <input required name="cardexp" inputmode="numeric" autocomplete="cc-exp" maxlength="5" placeholder="MM/YY" aria-label="Expiry date">
+        <input required name="cardcvv" inputmode="numeric" autocomplete="cc-csc" maxlength="4" placeholder="CVV" aria-label="CVV" type="password">
+      </div>`;
+  } else {
+    box.innerHTML = "";
+  }
+}
+document.addEventListener("change", e => { if (e.target.name === "payment") renderPayFields(); });
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.name === "cardnumber") t.value = t.value.replace(/\D/g, "").slice(0, 19).replace(/(.{4})/g, "$1 ").trim();
+  if (t.name === "cardexp") {
+    let d = t.value.replace(/\D/g, "").slice(0, 4);
+    t.value = d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d;
+  }
+  if (t.name === "cardcvv") t.value = t.value.replace(/\D/g, "").slice(0, 4);
+  if (t.name === "wallet") t.value = t.value.replace(/[^\d+\s-]/g, "");
+});
+
+// Returns {details} to send with the order, or {error}
+function readPayment(f){
+  const m = f.get("payment");
+  if (m === "GCash" || m === "Maya") {
+    const n = String(f.get("wallet") || "").replace(/[\s-]/g, "");
+    if (!/^(09|\+639)\d{9}$/.test(n)) return { error: "Please enter a valid " + m + " mobile number, for example 09171234567." };
+    return { details: n, last4: n.slice(-4) };
+  }
+  if (m === "Credit/Debit Card") {
+    const num = String(f.get("cardnumber") || "").replace(/\D/g, "");
+    if (num.length < 13 || num.length > 19) return { error: "Please enter a valid card number." };
+    if (!String(f.get("cardname") || "").trim()) return { error: "Please enter the name on the card." };
+    const exp = String(f.get("cardexp") || "");
+    const mm = /^(\d{2})\/(\d{2})$/.exec(exp);
+    if (!mm || +mm[1] < 1 || +mm[1] > 12) return { error: "Please enter the expiry date as MM/YY." };
+    const now = new Date(), yy = now.getFullYear() % 100, cm = now.getMonth() + 1;
+    if (+mm[2] < yy || (+mm[2] === yy && +mm[1] < cm)) return { error: "This card has expired." };
+    if (!/^\d{3,4}$/.test(String(f.get("cardcvv") || ""))) return { error: "Please enter the 3 or 4 digit CVV." };
+    return { details: "Card ending " + num.slice(-4), last4: num.slice(-4) };
+  }
+  return { details: "" };
+}
+
+function showOrderDone(orderId, total, method, last4){
+  const msg = {
+    "Cash on Delivery": `Please prepare ${money(total)} in cash. You'll pay the rider when your order arrives.`,
+    "GCash": `Your GCash number ending in ${last4} has been recorded for this order. Our team will confirm your order shortly.`,
+    "Maya": `Your Maya number ending in ${last4} has been recorded for this order. Our team will confirm your order shortly.`,
+    "Credit/Debit Card": `Your card ending in ${last4} has been recorded for this order. Our team will confirm your order shortly.`
+  }[method] || "Thank you for your order.";
+  $("orderDone").innerHTML = `
+    <div class="done-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h2>Order placed!</h2>
+    <p class="done-id">Order #${orderId} &middot; ${money(total)}</p>
+    <p class="done-method">Payment: <b>${esc(method)}</b></p>
+    <p class="done-msg">${esc(msg)}</p>
+    <button class="btn" type="button" onclick="closeCheckout()">Continue shopping</button>`;
+  $("checkoutHead").classList.add("hidden");
+  $("checkoutTotal").classList.add("hidden");
+  document.querySelector(".checkout-form").classList.add("hidden");
+  $("orderDone").classList.remove("hidden");
+}
+
+// ---------- Product details ----------
+function openProduct(id){
+  const p = find(id); if (!p) return;
+  const specs = (p.specs || []).map(s => `<div><dt>${esc(s.label)}</dt><dd>${esc(s.value)}</dd></div>`).join("");
+  const steps = String(p.how || "").split("\n").map(s => s.trim()).filter(Boolean).map(s => `<li>${esc(s)}</li>`).join("");
+  $("productBody").className = "modal wide pd " + p.cat;
+  $("productBody").innerHTML = `
+    <button class="icon-btn pd-close" type="button" onclick="closeProduct()" aria-label="Close">✕</button>
+    <div class="pd-img"><img src="${esc(p.img)}" alt="${esc(p.name)}" data-size="${esc(p.size)}" onerror="this.replaceWith(fallbackTub(this.dataset.size))"></div>
+    <div class="pd-info">
+      <div class="eyebrow">${esc(CATS[p.cat])}</div>
+      <h2 id="pdTitle">${esc(p.name)}</h2>
+      <p class="pd-meta">${esc(p.size)}</p>
+      <p class="pd-price">${money(p.price)}</p>
+      <p class="pd-desc">${esc(p.desc || p.note)}</p>
+      ${specs ? `<h3>Specifications</h3><dl class="specs">${specs}</dl>` : ""}
+      ${steps ? `<h3>How to take it</h3><ol class="how">${steps}</ol>` : ""}
+      <p class="pd-warn">Supplements are not medicines. Check with a doctor first if you are pregnant or nursing, under 18, taking medication, or have a health condition. Do not exceed the suggested use.</p>
+      <button class="btn pd-add" type="button" onclick="addToCart(${p.id})">Add to cart · ${money(p.price)}</button>
+    </div>`;
+  $("productModal").classList.remove("hidden");
+  $("productModal").querySelector(".pd-close").focus();
+}
+function closeProduct(){ $("productModal").classList.add("hidden"); }
+$("productModal").addEventListener("click", e => { if (e.target.id === "productModal") closeProduct(); });
+$("productGrid").addEventListener("click", e => {
+  const v = e.target.closest("[data-view]");
+  if (v) openProduct(Number(v.dataset.view));
+});
+$("productGrid").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const v = e.target.closest("[data-view]");
+  if (v && v.getAttribute("role") === "button") { e.preventDefault(); openProduct(Number(v.dataset.view)); }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeProduct(); closeCheckout(); } });
+
 function focusSearch(){ document.getElementById("search").focus(); }
 function toast(t){
   const x = document.getElementById("toast");
@@ -297,17 +433,22 @@ function toast(t){
   setTimeout(() => x.style.display = "none", 2200);
 }
 
-// Load products from PHP, then apply category or price filter from the URL
+async function fetchProducts(){
+  const base = "id,name,img,size,category,price,tag,note";
+  for (const cols of [base + ",description,specs,how_to_take", base]) {   // second try works before the SQL update is run
+    const res = await fetch(SUPABASE_URL + "/rest/v1/products?select=" + cols + "&active=eq.true&order=id", { headers: SB_HEADERS });
+    if (res.ok) return res.json();
+  }
+  throw new Error("load failed");
+}
+
+// Load products from Supabase, then apply category or price filter from the URL
 window.addEventListener("DOMContentLoaded", async () => {
   try {
-    const res = await fetch(
-      SUPABASE_URL + "/rest/v1/products?select=id,name,img,size,category,price,tag,note&active=eq.true&order=id",
-      { headers: SB_HEADERS }
-    );
-    if (!res.ok) throw new Error();
-    products = (await res.json()).map(r => ({
+    products = (await fetchProducts()).map(r => ({
       id: r.id, name: r.name, img: r.img, size: r.size,
-      cat: r.category, price: Number(r.price), tag: r.tag, note: r.note
+      cat: r.category, price: Number(r.price), tag: r.tag, note: r.note,
+      desc: r.description || "", specs: Array.isArray(r.specs) ? r.specs : [], how: r.how_to_take || ""
     }));
   } catch (e) {
     document.getElementById("productGrid").innerHTML = `<p class="empty">Products couldn't be loaded. Check your internet connection and that the Supabase tables were created.</p>`;
