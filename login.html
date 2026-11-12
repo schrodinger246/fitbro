@@ -1,53 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>try{var t=localStorage.getItem("fitbroTheme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","light")}</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Log in — Fitbro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root { --ink:#0e1116; --ink-2:#1b212b; --paper:#e9ebee; --card:#fff; --blue:#2340ff; --orange:#d63f0b; --yellow:#ffd60a; --muted:#566070; --line:#cdd1d8; }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Work Sans', sans-serif; background: var(--paper); color: var(--ink); line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; }
-a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
-button, input { font: inherit; color: inherit; }
-button { cursor: pointer; border: none; background: none; }
+<link rel="stylesheet" href="fitbro.css">
+<script src="theme.js" defer></script>
 
-header { background: var(--ink); border-bottom: 4px solid var(--yellow); }
-.nav { max-width: 1280px; margin: auto; height: 72px; display: flex; align-items: center; gap: 32px; padding: 0 24px; }
-.logo { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 38px; letter-spacing: .02em; color: #fff; text-decoration: none; text-transform: uppercase; line-height: 1; }
-.logo b { color: var(--ink); background: var(--yellow); padding: 0 6px; margin-left: 2px; display: inline-block; transform: skewX(-8deg); }
-.back { margin-left: auto; color: #aab2bf; text-decoration: none; font-size: 15px; font-weight: 500; }
-.back:hover { color: #fff; }
-
-main { flex: 1; display: grid; place-items: center; padding: 56px 20px 80px; }
-.card { background: var(--card); width: 100%; max-width: 460px; border-top: 10px solid var(--yellow); padding: 36px; }
-.card h1 { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; text-transform: uppercase; margin-bottom: 6px; }
-.sub { color: var(--muted); font-size: 15px; margin-bottom: 22px; }
-
-.tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 2px solid var(--line); margin-bottom: 22px; }
-.tab { padding: 12px 0; font-weight: 600; color: var(--muted); border-bottom: 4px solid transparent; margin-bottom: -2px; }
-.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--blue); }
-
-form { display: grid; gap: 14px; }
-label { font-size: 14px; font-weight: 600; display: grid; gap: 6px; }
-input { width: 100%; padding: 13px 14px; border: 2px solid var(--line); background: #fff; border-radius: 4px; outline: none; font-weight: 400; }
-input:focus { border-color: var(--blue); }
-.btn { display: inline-flex; align-items: center; justify-content: center; background: var(--blue); color: #fff; padding: 14px 24px; border-radius: 4px; font-weight: 600; font-size: 16px; text-decoration: none; transition: background .2s; }
-.btn:hover { background: #1830d6; }
-.btn:disabled { opacity: .6; cursor: wait; }
-.btn.outline { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
-.btn.outline:hover { background: var(--ink); color: #fff; }
-.link { color: var(--blue); font-size: 14px; font-weight: 600; text-align: left; justify-self: start; text-decoration: underline; }
-.msg { font-size: 14px; font-weight: 500; padding: 10px 12px; border-left: 5px solid; margin-bottom: 14px; display: none; }
-.msg.error { display: block; color: var(--orange); border-color: var(--orange); background: #fdeee8; }
-.msg.ok { display: block; color: #123; border-color: var(--blue); background: #e7ebff; }
-.hidden { display: none !important; }
-.stack { display: grid; gap: 12px; }
-.hint { font-size: 13px; color: var(--muted); font-weight: 400; }
-</style>
 </head>
 <body>
 
@@ -58,7 +21,7 @@ input:focus { border-color: var(--blue); }
   </div>
 </header>
 
-<main>
+<main class="login">
   <div class="card">
     <h1 id="title">Welcome</h1>
     <p class="sub" id="subtitle">Log in or create an account to check out faster.</p>

@@ -180,7 +180,6 @@ footer { background: var(--ink); color: #fff; }
     <a href="index.html#contact">Contact</a>
   </nav>
   <div class="nav-actions">
-    <span class="auth-area" id="authArea"></span>
     <button class="icon-btn" onclick="focusSearch()" aria-label="Search">⌕</button>
     <button class="icon-btn" onclick="toggleCart()" aria-label="Cart">
       🛒<span class="badge" id="cartCount">0</span>
@@ -298,12 +297,12 @@ footer { background: var(--ink); color: #fff; }
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="auth.js"></script>
 <script>
 const CATS = { "bulking": "Bulking", "cutting": "Cutting / Fat Loss", "all-phase": "All-Phase" };
 
 // ---- Supabase connection ----
+const SUPABASE_URL = "https://iccsikyagmkdtivglzhp.supabase.co";
+const SUPABASE_KEY = "sb_publishable_r9cG6p7zAZcyf2K7dm7-pQ_AT4xvHKl"; // publishable key: safe in the browser because Row Level Security is on
 const SB_HEADERS = { "apikey": SUPABASE_KEY, "Content-Type": "application/json" };
 
 let products = [];   // loaded from Supabase
@@ -397,15 +396,6 @@ function openCheckout(){
   if (!cart.length) { toast("Your cart is empty"); return; }
   document.getElementById("checkoutTotal").innerHTML = `<b>Order total: ${money(cartTotal())}</b>`;
   document.getElementById("checkoutModal").classList.remove("hidden");
-  prefillCheckout();
-}
-async function prefillCheckout(){
-  const u = await currentUser();
-  if (!u) return;
-  const n = document.querySelector(".checkout-form [name=name]");
-  const m = document.querySelector(".checkout-form [name=email]");
-  if (n && !n.value) n.value = (u.user_metadata && u.user_metadata.full_name) || "";
-  if (m && !m.value) m.value = u.email || "";
 }
 function closeCheckout(){ document.getElementById("checkoutModal").classList.add("hidden"); }
 async function placeOrder(e){
@@ -417,12 +407,9 @@ async function placeOrder(e){
   err.style.display = "none";
   btn.disabled = true; btn.textContent = "Placing order...";
   try {
-    const { data: { session } } = await sb.auth.getSession();
-    const orderHeaders = { ...SB_HEADERS };
-    if (session) orderHeaders["Authorization"] = "Bearer " + session.access_token;
     const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/place_order", {
       method: "POST",
-      headers: orderHeaders,
+      headers: SB_HEADERS,
       body: JSON.stringify({
         customer: {
           name: f.get("name"), email: f.get("email"), phone: f.get("phone"),

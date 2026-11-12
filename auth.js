@@ -13,21 +13,6 @@ function escapeHtml(t) {
   return String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// Header styles for the login / logout area
-(function () {
-  const css = `
-  .nav-actions { display: flex; align-items: center; gap: 10px; }
-  .auth-area { display: flex; align-items: center; gap: 10px; }
-  .auth-name { color: #fff; font-size: 14px; font-weight: 500; }
-  .auth-btn { color: #fff; background: transparent; border: 2px solid #3a4250; border-radius: 4px; padding: 9px 14px;
-    font: 600 14px 'Work Sans', sans-serif; text-decoration: none; cursor: pointer; transition: border-color .2s; }
-  .auth-btn:hover { border-color: #ffd60a; }
-  @media (max-width: 640px) { .auth-name { display: none; } }`;
-  const el = document.createElement("style");
-  el.textContent = css;
-  document.head.appendChild(el);
-})();
-
 async function renderAuthArea() {
   const el = document.getElementById("authArea");
   if (!el) return;
