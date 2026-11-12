@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>try{var t=localStorage.getItem("fitbroTheme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","light")}</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin — Fitbro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fitbro.css">
+<script src="theme.js" defer></script>
+<style>
+.admin-tag { background: var(--yellow); color: #0e1116; font-weight: 700; font-size: 12px; padding: 3px 12px; border-radius: 999px; }
+.wrap { max-width: 1280px; margin: auto; padding: 40px 24px 90px; }
+.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.top h1 { font-size: clamp(44px, 6vw, 72px); margin: 0; background: none; -webkit-text-fill-color: var(--text); animation: none; }
+.top p { color: var(--muted); }
+.atabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.atab { padding: 10px 20px; border-radius: 999px; font-weight: 600; background: var(--input); border: 1px solid var(--glass-border); color: var(--muted); transition: all .2s; }
+.atab:hover { color: var(--text); }
+.atab[aria-selected="true"] { background: var(--btn); color: #fff; border-color: transparent; }
+.pane { animation: fadeUp .4s both; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat { background: var(--glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px solid var(--glass-border); border-radius: 22px; padding: 22px; box-shadow: var(--shadow); }
+.stat small { color: var(--muted); font-weight: 600; font-size: 14px; }
+.stat b { display: block; font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 44px; line-height: 1.1; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.panel { background: var(--glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 24px; box-shadow: var(--shadow); }
+.panel h2 { font-family: 'Big Shoulders Display', sans-serif; font-weight: 800; font-size: 28px; text-transform: uppercase; margin-bottom: 14px; }
+.bar { display: grid; grid-template-columns: 100px 1fr 36px; align-items: center; gap: 10px; margin: 8px 0; font-size: 14px; }
+.bar i { display: block; height: 10px; border-radius: 10px; background: var(--paper); overflow: hidden; }
+.bar i span { display: block; height: 100%; border-radius: 10px; background: var(--btn); transition: width .8s cubic-bezier(.2,.8,.2,1); }
+.tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.tools .search { flex: 1; min-width: 220px; }
+.tbtn { padding: 10px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; background: var(--btn); color: #fff; transition: transform .2s; }
+.tbtn:hover { transform: translateY(-2px); }
+.tbtn.ghost { background: var(--input); color: var(--text); border: 1px solid var(--glass-border); }
+.tbtn.danger { background: var(--orange); }
+.tbtn.sm { padding: 6px 14px; font-size: 13px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; color: var(--muted); font-size: 13px; font-weight: 600; padding: 10px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr.click { cursor: pointer; transition: background .2s; }
+tbody tr.click:hover { background: var(--paper); }
+td.num, th.num { text-align: right; white-space: nowrap; }
+.badge2 { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: capitalize; }
+.s-pending { background: #ffd60a; color: #0e1116; }
+.s-paid { background: #2340ff; color: #fff; }
+.s-shipped { background: #d63f0b; color: #fff; }
+.s-delivered { background: #1f9d55; color: #fff; }
+.s-cancelled { background: #6b7280; color: #fff; }
+.pthumb { width: 44px; height: 44px; object-fit: contain; border-radius: 10px; background: var(--img-bg); }
+.pthumb.none { display: inline-block; }
+.modal.wide { max-width: 720px; }
+.mhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 14px; margin-bottom: 16px; }
+.kv span { color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+.form2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form2 .full { grid-column: 1 / -1; }
+.form2 label { font-size: 13px; font-weight: 600; display: grid; gap: 4px; }
+.form2 input:not([type=checkbox]), .form2 select { width: 100%; border-radius: 14px; }
+.chk { display: flex !important; align-items: center; gap: 8px; }
+.note { color: var(--muted); font-size: 13px; }
+.msgline { color: var(--orange); font-size: 14px; font-weight: 500; min-height: 20px; }
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 540px) { .stats { grid-template-columns: 1fr; } .form2 { grid-template-columns: 1fr; } .kv { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="nav">
+    <a href="index.html" class="logo">Fit<b>bro</b></a>
+    <span class="admin-tag">Admin</span>
+    <div class="nav-actions" id="navActions" style="margin-left:auto">
+      <span class="auth-name" id="who"></span>
+      <button class="auth-btn hidden" id="logoutBtn" type="button">Log out</button>
+    </div>
+  </div>
+</header>
+
+<!-- Sign in -->
+<main class="login" id="gateWrap">
+  <div class="card">
+    <h1>Admin login</h1>
+    <p class="sub">Staff only. Sign in with your admin account.</p>
+    <div id="gateMsg" class="msg" role="status" aria-live="polite"></div>
+    <form id="gateForm">
+      <label>Username or email <input type="text" name="user" autocomplete="username" required></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+  </div>
+</main>
+
+<!-- Signed in, but not an admin -->
+<main class="login hidden" id="deniedWrap">
+  <div class="card">
+    <h1>No access</h1>
+    <p class="sub">This account isn't an admin account.</p>
+    <div class="stack">
+      <a class="btn" href="Fitbro_Shop.html">Back to shop</a>
+      <button class="btn outline" type="button" id="deniedLogout">Log out</button>
+    </div>
+  </div>
+</main>
+
+<!-- Dashboard -->
+<main class="wrap hidden" id="dashWrap">
+  <div class="top">
+    <div>
+      <div class="eyebrow">Store management</div>
+      <h1>Dashboard</h1>
+    </div>
+    <button class="tbtn ghost" id="refreshBtn" type="button">↻ Refresh</button>
+  </div>
+
+  <div class="atabs" role="tablist">
+    <button class="atab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="atab" data-tab="orders" aria-selected="false">Orders</button>
+    <button class="atab" data-tab="products" aria-selected="false">Products</button>
+  </div>
+
+  <section class="pane" id="pane-overview">
+    <div class="stats" id="stats"></div>
+    <div class="grid2">
+      <div class="panel"><h2>Orders by status</h2><div id="statusBars"></div></div>
+      <div class="panel"><h2>Top products</h2><div class="table-wrap"><table><tbody id="topProducts"></tbody></table></div></div>
+    </div>
+    <div class="panel"><h2>Latest orders</h2><div class="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Status</th><th class="num">Total</th></tr></thead><tbody id="recentOrders"></tbody></table></div></div>
+  </section>
+
+  <section class="pane hidden" id="pane-orders">
+    <div class="panel">
+      <div class="tools">
+        <input id="oSearch" class="search" placeholder="Search by order #, name, email or phone..." aria-label="Search orders">
+        <select id="oStatus" aria-label="Filter by status"><option value="all">All statuses</option></select>
+        <button class="tbtn ghost" id="csvBtn" type="button">Export CSV</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Payment</th><th>Status</th><th class="num">Total</th></tr></thead>
+        <tbody id="orderRows"></tbody>
+      </table></div>
+      <p class="note" id="orderCount" style="margin-top:12px"></p>
+    </div>
+  </section>
+
+  <section class="pane hidden" id="pane-products">
+    <div class="panel">
+      <div class="tools">
+        <input id="pSearch" class="search" placeholder="Search products..." aria-label="Search products">
+        <button class="tbtn" id="addProductBtn" type="button">+ Add product</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>Product</th><th>Category</th><th class="num">Price</th><th>Status</th><th></th></tr></thead>
+        <tbody id="productRows"></tbody>
+      </table></div>
+    </div>
+  </section>
+</main>
+
+<!-- Order detail -->
+<div class="overlay hidden" id="orderModal">
+  <div class="modal wide" id="orderBody"></div>
+</div>
+
+<!-- Product form -->
+<div class="overlay hidden" id="productModal">
+  <div class="modal wide">
+    <div class="mhead"><h2 id="pTitle">Product</h2><button class="icon-btn" type="button" id="pClose" aria-label="Close">✕</button></div>
+    <form id="productForm" class="form2">
+      <label class="full">Name <input name="name" required maxlength="120"></label>
+      <label>Image file name <input name="img" required placeholder="Mass Gainer.jpg"></label>
+      <label>Size <input name="size" required placeholder="3 kg"></label>
+      <label>Category
+        <select name="category" required>
+          <option value="bulking">Bulking</option>
+          <option value="cutting">Cutting / Fat Loss</option>
+          <option value="all-phase">All-Phase</option>
+        </select>
+      </label>
+      <label>Price (₱) <input name="price" type="number" min="0" step="0.01" required></label>
+      <label>Tag <input name="tag" placeholder="New, Best Seller, or empty" maxlength="30"></label>
+      <label class="full">Short description <input name="note" maxlength="255"></label>
+      <label class="chk full"><input type="checkbox" name="active" checked> Show in the shop</label>
+      <p class="msgline full" id="pMsg"></p>
+      <div class="row full"><button class="tbtn" type="submit">Save product</button><button class="tbtn ghost" type="button" id="pCancel">Cancel</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="auth.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = escapeHtml;
+const ADMIN_DOMAIN = "example.com";   // typing just "admin123" signs in as admin123@example.com
+const STATUSES = ["pending", "paid", "shipped", "delivered", "cancelled"];
+const CATS = { "bulking": "Bulking", "cutting": "Cutting / Fat Loss", "all-phase": "All-Phase" };
+let orders = [], products = [], editingId = null;
+
+const money = n => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 });
+const fmtDate = d => new Date(d).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+const badge = s => `<span class="badge2 s-${esc(s)}">${esc(s)}</span>`;
+
+function toast(t) {
+  const x = $("toast"); x.textContent = t; x.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => x.style.display = "none", 2600);
+}
+function gateMsg(t, type) { const m = $("gateMsg"); m.textContent = t || ""; m.className = "msg" + (t ? " " + type : ""); }
+
+/* ---------- access control (the real protection is the database rules in fitbro_admin.sql) ---------- */
+async function isAdmin() {
+  const u = await currentUser();
+  if (!u) return false;
+  const { data, error } = await sb.from("admins").select("user_id").eq("user_id", u.id).maybeSingle();
+  return !error && !!data;
+}
+function show(which) {
+  $("gateWrap").classList.toggle("hidden", which !== "gate");
+  $("deniedWrap").classList.toggle("hidden", which !== "denied");
+  $("dashWrap").classList.toggle("hidden", which !== "dash");
+  $("logoutBtn").classList.toggle("hidden", which === "gate");
+}
+async function route() {
+  const u = await currentUser();
+  if (!u) { show("gate"); $("who").textContent = ""; return; }
+  $("who").textContent = u.email;
+  if (!(await isAdmin())) { show("denied"); return; }
+  show("dash");
+  loadAll();
+}
+$("gateForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const user = f.get("user").trim();
+  const email = user.includes("@") ? user : user + "@" + ADMIN_DOMAIN;
+  const btn = e.target.querySelector("button"); btn.disabled = true; btn.textContent = "Please wait...";
+  gateMsg("");
+  const { error } = await sb.auth.signInWithPassword({ email, password: f.get("password") });
+  btn.disabled = false; btn.textContent = "Sign in";
+  if (error) { gateMsg(/rate|too many/i.test(error.message) ? "Too many attempts. Wait a few minutes." : "Wrong username or password.", "error"); return; }
+  e.target.reset();
+  route();
+};
+async function logout() { await sb.auth.signOut(); orders = []; products = []; route(); }
+$("logoutBtn").onclick = logout;
+$("deniedLogout").onclick = logout;
+
+/* ---------- data ---------- */
+async function loadAll() {
+  const [o, p] = await Promise.all([
+    sb.from("orders").select("*, order_items(*)").order("created_at", { ascending: false }).limit(1000),
+    sb.from("products").select("*").order("id")
+  ]);
+  if (o.error || p.error) { toast("Couldn't load data. Did you run fitbro_admin.sql?"); return; }
+  orders = o.data; products = p.data;
+  renderOverview(); renderOrders(); renderProducts();
+}
+$("refreshBtn").onclick = async () => { await loadAll(); toast("Refreshed"); };
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".atab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".atab").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["overview", "orders", "products"].forEach(t => $("pane-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+});
+
+/* ---------- overview ---------- */
+function renderOverview() {
+  const live = orders.filter(o => o.status !== "cancelled");
+  const revenue = live.reduce((a, o) => a + Number(o.total), 0);
+  const pending = orders.filter(o => o.status === "pending").length;
+  const activeP = products.filter(p => p.active).length;
+  $("stats").innerHTML = [
+    ["Total orders", orders.length], ["Revenue (excl. cancelled)", money(revenue)],
+    ["Pending orders", pending], ["Products live", activeP + " / " + products.length]
+  ].map(([l, v]) => `<div class="stat"><small>${l}</small><b>${v}</b></div>`).join("");
+
+  const max = Math.max(1, ...STATUSES.map(s => orders.filter(o => o.status === s).length));
+  $("statusBars").innerHTML = STATUSES.map(s => {
+    const n = orders.filter(o => o.status === s).length;
+    return `<div class="bar"><span style="text-transform:capitalize">${s}</span><i><span style="width:${n / max * 100}%"></span></i><b>${n}</b></div>`;
+  }).join("");
+
+  const sold = {};
+  live.forEach(o => (o.order_items || []).forEach(i => {
+    sold[i.product_name] = sold[i.product_name] || { qty: 0, rev: 0 };
+    sold[i.product_name].qty += i.qty; sold[i.product_name].rev += i.qty * Number(i.unit_price);
+  }));
+  const top = Object.entries(sold).sort((a, b) => b[1].qty - a[1].qty).slice(0, 5);
+  $("topProducts").innerHTML = top.length ? top.map(([n, s]) =>
+    `<tr><td>${esc(n)}</td><td class="num">${s.qty} sold</td><td class="num">${money(s.rev)}</td></tr>`).join("")
+    : `<tr><td class="note">No sales yet.</td></tr>`;
+
+  $("recentOrders").innerHTML = orders.slice(0, 5).map(o => orderRow(o, true)).join("")
+    || `<tr><td colspan="5" class="note">No orders yet.</td></tr>`;
+  bindRows("recentOrders");
+}
+
+/* ---------- orders ---------- */
+$("oStatus").innerHTML += STATUSES.map(s => `<option value="${s}" style="text-transform:capitalize">${s}</option>`).join("");
+function orderRow(o, short) {
+  return short
+    ? `<tr class="click" data-id="${o.id}"><td>#${o.id}</td><td>${esc(o.customer_name)}</td><td>${fmtDate(o.created_at)}</td><td>${badge(o.status)}</td><td class="num">${money(o.total)}</td></tr>`
+    : `<tr class="click" data-id="${o.id}"><td>#${o.id}</td><td>${fmtDate(o.created_at)}</td><td>${esc(o.customer_name)}<br><span class="note">${esc(o.email)}</span></td><td>${esc(o.payment_method)}</td><td>${badge(o.status)}</td><td class="num">${money(o.total)}</td></tr>`;
+}
+function bindRows(id) { document.querySelectorAll("#" + id + " tr.click").forEach(r => r.onclick = () => openOrder(Number(r.dataset.id))); }
+function renderOrders() {
+  const q = $("oSearch").value.trim().toLowerCase(), st = $("oStatus").value;
+  const list = orders.filter(o =>
+    (st === "all" || o.status === st) &&
+    (!q || ("#" + o.id + " " + o.id + " " + o.customer_name + " " + o.email + " " + o.phone).toLowerCase().includes(q)));
+  $("orderRows").innerHTML = list.map(o => orderRow(o, false)).join("") || `<tr><td colspan="6" class="note">No orders match.</td></tr>`;
+  $("orderCount").textContent = list.length + " of " + orders.length + " orders";
+  bindRows("orderRows");
+}
+$("oSearch").oninput = renderOrders; $("oStatus").onchange = renderOrders;
+
+function openOrder(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  $("orderBody").innerHTML = `
+    <div class="mhead"><div><div class="eyebrow">Order details</div><h2>Order #${o.id}</h2></div>
+      <button class="icon-btn" type="button" id="oClose" aria-label="Close">✕</button></div>
+    <div class="kv">
+      <span>Placed</span><div>${fmtDate(o.created_at)}</div>
+      <span>Customer</span><div>${esc(o.customer_name)}</div>
+      <span>Email</span><div>${esc(o.email)}</div>
+      <span>Phone</span><div>${esc(o.phone)}</div>
+      <span>Address</span><div>${esc(o.address)}, ${esc(o.city)}</div>
+      <span>Payment</span><div>${esc(o.payment_method)}</div>
+      <span>Account</span><div>${o.user_id ? "Registered customer" : "Guest checkout"}</div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Item</th><th class="num">Price</th><th class="num">Qty</th><th class="num">Subtotal</th></tr></thead>
+      <tbody>${(o.order_items || []).map(i => `<tr><td>${esc(i.product_name)}</td><td class="num">${money(i.unit_price)}</td><td class="num">${i.qty}</td><td class="num">${money(i.qty * i.unit_price)}</td></tr>`).join("")}
+      <tr><td colspan="3" class="num"><b>Total</b></td><td class="num"><b>${money(o.total)}</b></td></tr></tbody>
+    </table></div>
+    <div class="row">
+      <label style="font-weight:600;font-size:14px">Status
+        <select id="oNewStatus">${STATUSES.map(s => `<option value="${s}" ${s === o.status ? "selected" : ""}>${s[0].toUpperCase() + s.slice(1)}</option>`).join("")}</select></label>
+      <button class="tbtn" id="oSave" type="button">Update status</button>
+      <button class="tbtn danger" id="oDelete" type="button" style="margin-left:auto">Delete order</button>
+    </div>`;
+  $("orderModal").classList.remove("hidden");
+  $("oClose").onclick = closeOrder;
+  $("oSave").onclick = async () => {
+    const status = $("oNewStatus").value;
+    const { data, error } = await sb.from("orders").update({ status }).eq("id", id).select();
+    if (error || !data || !data.length) { toast("Couldn't update. Check fitbro_admin.sql was run."); return; }
+    o.status = status; toast("Order #" + id + " marked " + status);
+    renderOverview(); renderOrders(); closeOrder();
+  };
+  $("oDelete").onclick = async () => {
+    if (!confirm("Delete order #" + id + " permanently? This can't be undone.")) return;
+    const { data, error } = await sb.from("orders").delete().eq("id", id).select();
+    if (error || !data || !data.length) { toast("Couldn't delete the order."); return; }
+    orders = orders.filter(x => x.id !== id); toast("Order deleted");
+    renderOverview(); renderOrders(); closeOrder();
+  };
+}
+function closeOrder() { $("orderModal").classList.add("hidden"); }
+$("orderModal").addEventListener("click", e => { if (e.target.id === "orderModal") closeOrder(); });
+
+/* CSV export (cells starting with = + - @ are neutralised so spreadsheets can't run them) */
+function csvCell(v) {
+  let s = String(v ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+$("csvBtn").onclick = () => {
+  const head = ["Order", "Date", "Name", "Email", "Phone", "Address", "City", "Payment", "Status", "Total", "Items"];
+  const rows = orders.map(o => [o.id, o.created_at, o.customer_name, o.email, o.phone, o.address, o.city, o.payment_method, o.status, o.total,
+    (o.order_items || []).map(i => i.qty + "x " + i.product_name).join("; ")]);
+  const csv = [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
+  a.download = "fitbro-orders-" + new Date().toISOString().slice(0, 10) + ".csv";
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* ---------- products ---------- */
+function renderProducts() {
+  const q = $("pSearch").value.trim().toLowerCase();
+  const list = products.filter(p => !q || p.name.toLowerCase().includes(q));
+  $("productRows").innerHTML = list.map(p => `<tr>
+    <td><img class="pthumb" src="${esc(p.img)}" alt="" onerror="this.style.visibility='hidden'"></td>
+    <td><b>${esc(p.name)}</b><br><span class="note">${esc(p.size)}${p.tag ? " · " + esc(p.tag) : ""}</span></td>
+    <td>${esc(CATS[p.category] || p.category)}</td>
+    <td class="num">${money(p.price)}</td>
+    <td>${p.active ? '<span class="badge2 s-delivered">Live</span>' : '<span class="badge2 s-cancelled">Hidden</span>'}</td>
+    <td class="num"><button class="tbtn sm ghost" data-act="edit" data-id="${p.id}">Edit</button>
+      <button class="tbtn sm ghost" data-act="toggle" data-id="${p.id}">${p.active ? "Hide" : "Show"}</button>
+      <button class="tbtn sm danger" data-act="del" data-id="${p.id}">Delete</button></td></tr>`).join("")
+    || `<tr><td colspan="6" class="note">No products.</td></tr>`;
+  document.querySelectorAll("#productRows button").forEach(b => b.onclick = () => productAction(b.dataset.act, Number(b.dataset.id)));
+}
+$("pSearch").oninput = renderProducts;
+
+async function productAction(act, id) {
+  const p = products.find(x => x.id === id); if (!p) return;
+  if (act === "edit") return openProduct(p);
+  if (act === "toggle") {
+    const { data, error } = await sb.from("products").update({ active: !p.active }).eq("id", id).select();
+    if (error || !data.length) return toast("Couldn't update the product.");
+    p.active = !p.active; toast(p.name + (p.active ? " is now live" : " is now hidden"));
+    renderProducts(); renderOverview();
+  }
+  if (act === "del") {
+    if (!confirm('Delete "' + p.name + '"? Hide it instead if it has past orders.')) return;
+    const { error } = await sb.from("products").delete().eq("id", id);
+    if (error) return toast("Can't delete: it has past orders. Use Hide instead.");
+    products = products.filter(x => x.id !== id); toast("Product deleted");
+    renderProducts(); renderOverview();
+  }
+}
+function openProduct(p) {
+  editingId = p ? p.id : null;
+  $("pTitle").textContent = p ? "Edit product" : "Add product";
+  const f = $("productForm"); $("pMsg").textContent = "";
+  f.name.value = p ? p.name : ""; f.img.value = p ? p.img : ""; f.size.value = p ? p.size : "";
+  f.category.value = p ? p.category : "bulking"; f.price.value = p ? p.price : "";
+  f.tag.value = p ? p.tag : ""; f.note.value = p ? p.note : ""; f.active.checked = p ? p.active : true;
+  $("productModal").classList.remove("hidden");
+}
+function closeProduct() { $("productModal").classList.add("hidden"); }
+$("addProductBtn").onclick = () => openProduct(null);
+$("pClose").onclick = closeProduct; $("pCancel").onclick = closeProduct;
+$("productModal").addEventListener("click", e => { if (e.target.id === "productModal") closeProduct(); });
+$("productForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target;
+  const row = { name: f.name.value.trim(), img: f.img.value.trim(), size: f.size.value.trim(), category: f.category.value,
+    price: Number(f.price.value), tag: f.tag.value.trim(), note: f.note.value.trim(), active: f.active.checked };
+  const q = editingId ? sb.from("products").update(row).eq("id", editingId).select() : sb.from("products").insert(row).select();
+  const { data, error } = await q;
+  if (error || !data || !data.length) { $("pMsg").textContent = "Couldn't save: " + (error ? error.message : "not allowed"); return; }
+  if (editingId) products = products.map(x => x.id === editingId ? data[0] : x); else products.push(data[0]);
+  closeProduct(); renderProducts(); renderOverview(); toast("Product saved");
+};
+
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeOrder(); closeProduct(); } });
+sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") route(); });
+route();
+</script>
+</body>
+</html>
